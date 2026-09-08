@@ -20,10 +20,24 @@ public class GameSetup : EditorWindow
         Sprite sprB = texB != null ? Sprite.Create(texB, new Rect(0, 0, texB.width, texB.height), new Vector2(0.5f, 0.5f), Mathf.Max(texB.width, texB.height)) : null;
         Sprite sprC = texC != null ? Sprite.Create(texC, new Rect(0, 0, texC.width, texC.height), new Vector2(0.5f, 0.5f), Mathf.Max(texC.width, texC.height)) : null;
 
+        // Tải ảnh nền vũ trụ và cấu hình WrapMode = Repeat
+        string bgPath = "Assets/Sprites/space_bg.png";
+        TextureImporter bgImporter = AssetImporter.GetAtPath(bgPath) as TextureImporter;
+        if (bgImporter != null && bgImporter.wrapMode != TextureWrapMode.Repeat)
+        {
+            bgImporter.wrapMode = TextureWrapMode.Repeat;
+            bgImporter.SaveAndReimport();
+        }
+        Texture2D texBG = AssetDatabase.LoadAssetAtPath<Texture2D>(bgPath);
+        if (texBG != null)
+        {
+            texBG.wrapMode = TextureWrapMode.Repeat;
+        }
+
         // Dọn dẹp object cũ
         GameObject[] allObjects = FindObjectsOfType<GameObject>();
         foreach(GameObject go in allObjects) {
-            if (go.name.Contains("Prefab") || go.name.Contains("Object A") || go.name.Contains("Object B") || go.name.Contains("Object C") || go.name == "GameManager") {
+            if (go.name.Contains("Prefab") || go.name.Contains("Object A") || go.name.Contains("Object B") || go.name.Contains("Object C") || go.name == "GameManager" || go.name.Contains("Background") || go.name.Contains("GameCanvas") || go.name.Contains("EventSystem")) {
                 DestroyImmediate(go);
             }
         }
@@ -36,13 +50,17 @@ public class GameSetup : EditorWindow
             cam = camObj.AddComponent<Camera>();
         }
         cam.clearFlags = CameraClearFlags.SolidColor;
-        cam.backgroundColor = new Color(0.1f, 0.1f, 0.2f);
+        cam.backgroundColor = Color.black;
         cam.orthographic = true;
         cam.orthographicSize = 5f;
 
         // Tạo GameManager
         GameObject gmObj = new GameObject("GameManager");
         GameManager gm = gmObj.AddComponent<GameManager>();
+        gm.bgTexture = texBG;
+        gm.sourceFont = AssetDatabase.LoadAssetAtPath<Font>("Assets/Fonts/Arial.ttf") 
+                     ?? AssetDatabase.LoadAssetAtPath<Font>("Assets/Fonts/Tahoma.ttf") 
+                     ?? AssetDatabase.LoadAssetAtPath<Font>("Assets/Fonts/SegoeUI.ttf");
 
         // Tạo Prefabs
         gm.prefabA = CreateSpritePrefab("Prefab A (Ship)", sprA, Color.blue);
@@ -50,8 +68,6 @@ public class GameSetup : EditorWindow
         gm.prefabC = CreateSpritePrefab("Prefab C (Laser)", sprC, Color.yellow);
 
         // Đặt kích thước hiển thị (Scale)
-        // Nhờ phép chia PixelsPerUnit ở trên, ảnh gốc dù to 2000px hay 500px 
-        // thì scale 1.5f ở đây đều cho ra kích thước bằng nhau và nhỏ gọn trên màn hình!
         gm.objectWidth = 1.5f;
         gm.objectHeight = 1.5f;
 
@@ -64,7 +80,11 @@ public class GameSetup : EditorWindow
         gm.prefabB.SetActive(false);
         gm.prefabC.SetActive(false);
 
-        Debug.Log("=> Đã fix lỗi Ảnh khổng lồ (chia lại PixelsPerUnit) và Đổi chỗ Thiên thạch/Laser!");
+        // Khởi tạo hệ thống Canvas UI uGUI sắc nét ngay trong Scene
+        gm.SetupCanvasUI();
+        gm.UpdateUIState();
+
+        Debug.Log("=> Đã thiết lập thành công Scene với Canvas uGUI sắc nét chuẩn HD 1920x1080!");
     }
 
     private static GameObject CreateSpritePrefab(string name, Sprite sprite, Color backupColor)
