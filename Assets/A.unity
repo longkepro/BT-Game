@@ -2899,12 +2899,15 @@ MonoBehaviour:
   prefabC: {fileID: 1481027990}
   speedA: 5
   dirA: {x: 0, y: 1}
-  speedB: 3
+  speedB: 3.5
   dirB: {x: -1, y: 0}
-  speedC: 10
+  useFlexibleMovementB: 1
+  waveAmplitude: 2
+  waveFrequency: 2.2
+  speedC: 12
   dirC: {x: 1, y: 0}
-  objectWidth: 3
-  objectHeight: 3
+  objectWidth: 1.5
+  objectHeight: 1.5
 --- !u!4 &934753645
 Transform:
   m_ObjectHideFlags: 0

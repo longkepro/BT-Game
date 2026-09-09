@@ -108,6 +108,19 @@ public class GameManager : MonoBehaviour
 
     void Awake()
     {
+        // Ép các thông số chuẩn xác ngay tại thời điểm khởi chạy, 
+        // đảm bảo không bị ghi đè bởi các giá trị cũ lưu trong file Scene YAML hoặc Inspector máy khác
+        objectWidth = 1.5f;
+        objectHeight = 1.5f;
+        speedA = 5f;
+        speedB = 3.5f;
+        dirB = new Vector2(-1, 0);
+        useFlexibleMovementB = true;
+        waveAmplitude = 2.0f;
+        waveFrequency = 2.2f;
+        speedC = 12f;
+        dirC = new Vector2(1, 0);
+
         LoadTMPFont();
     }
 
