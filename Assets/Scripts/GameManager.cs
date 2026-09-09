@@ -1,7 +1,29 @@
 using UnityEngine;
 using UnityEngine.UI;
+using UnityEngine.EventSystems;
 using TMPro;
 using System.Collections.Generic;
+
+// Component hỗ trợ bắt sự kiện giữ ngón tay trên nút ảo Mobile
+public class VirtualHoldButton : MonoBehaviour, IPointerDownHandler, IPointerUpHandler, IPointerExitHandler
+{
+    public bool isPressed { get; private set; }
+
+    public void OnPointerDown(PointerEventData eventData)
+    {
+        isPressed = true;
+    }
+
+    public void OnPointerUp(PointerEventData eventData)
+    {
+        isPressed = false;
+    }
+
+    public void OnPointerExit(PointerEventData eventData)
+    {
+        isPressed = false;
+    }
+}
 
 public class GameManager : MonoBehaviour
 {
@@ -19,8 +41,13 @@ public class GameManager : MonoBehaviour
     public float speedA = 5f;
 
     [Header("Configs - Object B (Thiên Thạch)")]
-    public float speedB = 3f;
+    public float speedB = 3.5f;
     public Vector2 dirB = new Vector2(-1, 0); // Đi sang trái
+    public bool useFlexibleMovementB = true;  // Chuyển động lượn sóng linh hoạt (Lên/Xuống/Trái)
+    public float waveAmplitude = 2.0f;        // Biên độ lượn sóng dọc (Lên/Xuống)
+    public float waveFrequency = 2.2f;        // Tần số lượn sóng
+    private float waveTimerB = 0f;
+    private float baseY_B = 0f;
 
     [Header("Configs - Object C (Đạn Laser)")]
     public float speedC = 10f;
@@ -62,7 +89,14 @@ public class GameManager : MonoBehaviour
     public TextMeshProUGUI hudScoreText;
     public TextMeshProUGUI gameOverScoreText;
 
+    [Header("Mobile Virtual Controls (Cảm Ứng Android - D-Pad 4 Hướng)")]
+    public VirtualHoldButton btnUpHold;
+    public VirtualHoldButton btnDownHold;
+    public VirtualHoldButton btnLeftHold;
+    public VirtualHoldButton btnRightHold;
+
     private Sprite panelSprite;
+    private Camera mainCam;
 
     // Bán kính va chạm
     private float radiusA;
@@ -80,24 +114,24 @@ public class GameManager : MonoBehaviour
     void Start()
     {
         // 1. Lấy kích thước màn hình và xác định vùng tọa độ World Space
-        Camera cam = Camera.main;
-        if (cam == null)
+        mainCam = Camera.main;
+        if (mainCam == null)
         {
-            cam = Camera.main;
+            mainCam = Camera.main;
         }
-        float height = cam.orthographicSize * 2f;
-        float width = height * cam.aspect;
+        float height = mainCam.orthographicSize * 2f;
+        float width = height * mainCam.aspect;
         
         // Cấu hình biên (theo chuẩn Unity, y dương là bên trên)
-        left = cam.transform.position.x - width / 2f;
-        right = cam.transform.position.x + width / 2f;
-        top = cam.transform.position.y + height / 2f;
-        bottom = cam.transform.position.y - height / 2f;
+        left = mainCam.transform.position.x - width / 2f;
+        right = mainCam.transform.position.x + width / 2f;
+        top = mainCam.transform.position.y + height / 2f;
+        bottom = mainCam.transform.position.y - height / 2f;
 
         // 2. Khởi tạo Quad ảnh nền cuộn UV Offset
-        SetupBackground(cam, width, height);
+        SetupBackground(mainCam, width, height);
 
-        // 3. Khởi tạo Hệ thống UI Canvas TextMeshPro sắc nét
+        // 3. Khởi tạo Hệ thống UI Canvas TextMeshPro sắc nét kèm nút ảo Android
         SetupCanvasUI();
         UpdateUIState();
 
@@ -122,6 +156,8 @@ public class GameManager : MonoBehaviour
             objB.name = "Object B";
             objB.transform.localScale = new Vector3(objectWidth, objectHeight, 1);
             objB.transform.position = new Vector3(right - objectWidth / 2f, 0, 0);
+            baseY_B = 0f;
+            waveTimerB = 0f;
             objB.SetActive(true);
         }
     }
@@ -159,38 +195,90 @@ public class GameManager : MonoBehaviour
             return; // Dừng toàn bộ chuyển động khi đã Game Over
         }
 
-        // 1. Đọc input điều khiển đối tượng A (Phím W / S hoặc Mũi tên Lên / Xuống)
+        // 1. ĐỌC INPUT ĐIỀU KHIỂN TÀU A (4 HƯỚNG: LÊN, XUỐNG, TRÁI, PHẢI):
+        // Hỗ trợ đồng thời 3 cơ chế: Bàn phím máy tính + Nút ảo D-pad Android + Vuốt chạm 2D trực tiếp
+        float inputX = 0f;
         float inputY = 0f;
-        if (Input.GetKey(KeyCode.W) || Input.GetKey(KeyCode.UpArrow))
-        {
-            inputY += 1f;
-        }
-        if (Input.GetKey(KeyCode.S) || Input.GetKey(KeyCode.DownArrow))
-        {
-            inputY -= 1f;
-        }
+
+        // Cơ chế A1: Phím cứng PC (W / S / A / D hoặc Mũi tên 4 chiều)
+        if (Input.GetKey(KeyCode.W) || Input.GetKey(KeyCode.UpArrow)) inputY += 1f;
+        if (Input.GetKey(KeyCode.S) || Input.GetKey(KeyCode.DownArrow)) inputY -= 1f;
+        if (Input.GetKey(KeyCode.A) || Input.GetKey(KeyCode.LeftArrow)) inputX -= 1f;
+        if (Input.GetKey(KeyCode.D) || Input.GetKey(KeyCode.RightArrow)) inputX += 1f;
+
+        // Cơ chế A2: Cụm nút ảo Mobile D-Pad 4 chiều (Giữ nút ▲, ▼, ◄, ►)
+        if (btnUpHold != null && btnUpHold.isPressed) inputY += 1f;
+        if (btnDownHold != null && btnDownHold.isPressed) inputY -= 1f;
+        if (btnLeftHold != null && btnLeftHold.isPressed) inputX -= 1f;
+        if (btnRightHold != null && btnRightHold.isPressed) inputX += 1f;
 
         // Cập nhật vị trí A theo input người chơi
         if (objA != null)
         {
             Vector3 posA = objA.transform.position;
-            posA.y += inputY * speedA * Time.deltaTime;
-            
-            // Giữ A không chạy ra khỏi mép trên / mép dưới màn hình
+
+            if (inputX != 0f || inputY != 0f)
+            {
+                Vector3 moveDir = new Vector3(inputX, inputY, 0).normalized;
+                posA += moveDir * speedA * Time.deltaTime;
+            }
+
+            // Cơ chế A3: Vuốt / Kéo ngón tay trực tiếp trên màn hình Android (cả trục X và Y)
+            if (Input.touchCount > 0 && mainCam != null)
+            {
+                for (int i = 0; i < Input.touchCount; i++)
+                {
+                    Touch touch = Input.GetTouch(i);
+                    // Bỏ qua nếu ngón tay đang bấm vào nút ảo UI để không bị xung đột
+                    if (EventSystem.current != null && EventSystem.current.IsPointerOverGameObject(touch.fingerId))
+                    {
+                        continue;
+                    }
+
+                    // Khi người chơi vuốt hoặc giữ ngón tay trên màn hình, tàu lướt theo ngón tay 2 chiều
+                    if (touch.phase == TouchPhase.Moved || touch.phase == TouchPhase.Stationary)
+                    {
+                        Vector3 touchWorldPos = mainCam.ScreenToWorldPoint(touch.position);
+                        float targetX = Mathf.Clamp(touchWorldPos.x, left + objectWidth / 2f, right - objectWidth / 2f);
+                        float targetY = Mathf.Clamp(touchWorldPos.y, bottom + objectHeight / 2f, top - objectHeight / 2f);
+                        posA = Vector3.MoveTowards(posA, new Vector3(targetX, targetY, posA.z), speedA * 2.0f * Time.deltaTime);
+                        break; // Ưu tiên ngón tay điều khiển chính
+                    }
+                }
+            }
+
+            // Giữ A không chạy ra khỏi 4 mép màn hình
+            posA.x = Mathf.Clamp(posA.x, left + objectWidth / 2f, right - objectWidth / 2f);
             posA.y = Mathf.Clamp(posA.y, bottom + objectHeight / 2f, top - objectHeight / 2f);
             objA.transform.position = posA;
         }
 
-        // 2. Đọc input bắn đạn C: Click chuột, Chạm màn hình hoặc Phím Space
-        if (Input.GetMouseButtonDown(0) || (Input.touchCount > 0 && Input.GetTouch(0).phase == TouchPhase.Began) || Input.GetKeyDown(KeyCode.Space))
+        // 2. ĐỌC INPUT BẮN ĐẠN C:
+        // Hỗ trợ: Phím Space, Click chuột (PC/AVD) hoặc Chạm màn hình tự do (ngoài nút UI)
+        bool isPointerOverUI = EventSystem.current != null && EventSystem.current.IsPointerOverGameObject();
+        if (Input.GetKeyDown(KeyCode.Space) || (Input.GetMouseButtonDown(0) && !isPointerOverUI))
         {
             SpawnC();
         }
 
-        // 3. Cập nhật B (Di chuyển sang trái)
+        // 3. Cập nhật B (Di chuyển linh hoạt sang trái kết hợp lượn sóng lên/xuống)
         if (objB != null)
         {
-            objB.transform.position += (Vector3)dirB * speedB * Time.deltaTime;
+            if (useFlexibleMovementB)
+            {
+                waveTimerB += Time.deltaTime * waveFrequency;
+                Vector3 posB = objB.transform.position;
+                posB.x += dirB.x * speedB * Time.deltaTime;
+                posB.y = baseY_B + Mathf.Sin(waveTimerB) * waveAmplitude;
+                objB.transform.position = posB;
+            }
+            else
+            {
+                objB.transform.position += (Vector3)dirB * speedB * Time.deltaTime;
+            }
+
+            // Xoay nhẹ thiên thạch tạo hiệu ứng thị giác 2D sống động
+            objB.transform.Rotate(0, 0, 35f * Time.deltaTime);
 
             // Kiểm tra B chạm biên trái -> Bọc biên sang phải (Boundary Wrapping)
             CheckBoundariesB();
@@ -245,7 +333,7 @@ public class GameManager : MonoBehaviour
     }
 
     // Bắn đạn C xuất phát từ A
-    void SpawnC()
+    public void SpawnC()
     {
         if (objA == null || !objA.activeSelf) return;
 
@@ -262,9 +350,11 @@ public class GameManager : MonoBehaviour
     void RespawnB()
     {
         if (objB == null) return;
+        baseY_B = Random.Range(bottom + objectHeight * 1.5f, top - objectHeight * 1.5f);
+        waveTimerB = Random.Range(0f, Mathf.PI * 2f);
         Vector3 posB = objB.transform.position;
         posB.x = right - objectWidth / 2f;
-        posB.y = Random.Range(bottom + objectHeight / 2f, top - objectHeight / 2f);
+        posB.y = baseY_B;
         objB.transform.position = posB;
     }
 
@@ -368,17 +458,28 @@ public class GameManager : MonoBehaviour
         Vector3 posB = objB.transform.position;
         bool changed = false;
 
-        // B chạm biên trái -> Sang phải, Y random
+        // 1. B chạm biên trái -> Xuất hiện lại ở biên đối diện (biên phải) với Y ngẫu nhiên
         if (posB.x - objectWidth / 2f <= left)
         {
             posB.x = right - objectWidth / 2f;
-            posB.y = Random.Range(bottom + objectHeight / 2f, top - objectHeight / 2f);
+            baseY_B = Random.Range(bottom + objectHeight * 1.5f, top - objectHeight * 1.5f);
+            posB.y = baseY_B;
+            waveTimerB = Random.Range(0f, Mathf.PI * 2f);
             changed = true;
         }
-        // B chạm biên trên -> Xuống dưới, X random
+        // 2. B chạm biên trên -> Xuất hiện lại ở biên đối diện (biên dưới) với X ngẫu nhiên
         else if (posB.y + objectHeight / 2f >= top)
         {
             posB.y = bottom + objectHeight / 2f;
+            baseY_B = posB.y;
+            posB.x = Random.Range(left + objectWidth / 2f, right - objectWidth / 2f);
+            changed = true;
+        }
+        // 3. B chạm biên dưới -> Xuất hiện lại ở biên đối diện (biên trên) với X ngẫu nhiên
+        else if (posB.y - objectHeight / 2f <= bottom)
+        {
+            posB.y = top - objectHeight / 2f;
+            baseY_B = posB.y;
             posB.x = Random.Range(left + objectWidth / 2f, right - objectWidth / 2f);
             changed = true;
         }
@@ -514,6 +615,47 @@ public class GameManager : MonoBehaviour
         return btn;
     }
 
+    // Helper tạo nút bấm ảo Mobile có thể giữ (Virtual Button)
+    private GameObject CreateVirtualButton(string name, Transform parent, string labelText, float fontSize, Vector2 anchor, Vector2 pivot, Vector2 position, Vector2 size, Color bgColor)
+    {
+        GameObject btnObj = new GameObject(name);
+        btnObj.transform.SetParent(parent, false);
+        RectTransform rt = btnObj.AddComponent<RectTransform>();
+        rt.anchorMin = anchor;
+        rt.anchorMax = anchor;
+        rt.pivot = pivot;
+        rt.sizeDelta = size;
+        rt.anchoredPosition = position;
+
+        Image img = btnObj.AddComponent<Image>();
+        if (panelSprite != null)
+        {
+            img.sprite = panelSprite;
+            img.type = Image.Type.Sliced;
+        }
+        img.color = Color.white;
+
+        Button btn = btnObj.AddComponent<Button>();
+        btn.targetGraphic = img;
+
+        ColorBlock cb = btn.colors;
+        cb.normalColor = bgColor;
+        cb.highlightedColor = new Color(Mathf.Min(1f, bgColor.r * 1.25f), Mathf.Min(1f, bgColor.g * 1.25f), Mathf.Min(1f, bgColor.b * 1.25f), bgColor.a);
+        cb.pressedColor = new Color(bgColor.r * 0.7f, bgColor.g * 0.7f, bgColor.b * 0.7f, 1f);
+        cb.selectedColor = bgColor;
+        cb.colorMultiplier = 1f;
+        btn.colors = cb;
+
+        TextMeshProUGUI tmpText = CreateTMPText("Text", btnObj.transform, labelText, fontSize, FontWeight.Bold, Color.white, TextAlignmentOptions.Center);
+        RectTransform rtText = tmpText.rectTransform;
+        rtText.anchorMin = Vector2.zero;
+        rtText.anchorMax = Vector2.one;
+        rtText.sizeDelta = Vector2.zero;
+        rtText.anchoredPosition = Vector2.zero;
+
+        return btnObj;
+    }
+
     // KHỞI TẠO TOÀN BỘ GIAO DIỆN CANVAS TEXTMESHPRO CHUẨN VECTOR FULL HD
     public void SetupCanvasUI()
     {
@@ -527,14 +669,14 @@ public class GameManager : MonoBehaviour
 
         // 1. Đảm bảo EventSystem tồn tại để bắt sự kiện chuột / phím
 #if UNITY_2023_1_OR_NEWER
-        if (FindFirstObjectByType<UnityEngine.EventSystems.EventSystem>() == null)
+        if (FindFirstObjectByType<EventSystem>() == null)
 #else
-        if (FindObjectOfType<UnityEngine.EventSystems.EventSystem>() == null)
+        if (FindObjectOfType<EventSystem>() == null)
 #endif
         {
             GameObject es = new GameObject("EventSystem");
-            es.AddComponent<UnityEngine.EventSystems.EventSystem>();
-            es.AddComponent<UnityEngine.EventSystems.StandaloneInputModule>();
+            es.AddComponent<EventSystem>();
+            es.AddComponent<StandaloneInputModule>();
         }
 
         // 2. Dọn dẹp GameCanvas cũ nếu có và tạo Canvas mới với CanvasScaler 1920x1080
@@ -575,7 +717,7 @@ public class GameManager : MonoBehaviour
         rtCard.anchorMin = new Vector2(0.5f, 0.5f);
         rtCard.anchorMax = new Vector2(0.5f, 0.5f);
         rtCard.pivot = new Vector2(0.5f, 0.5f);
-        rtCard.sizeDelta = new Vector2(780, 530);
+        rtCard.sizeDelta = new Vector2(800, 550);
         rtCard.anchoredPosition = Vector2.zero;
 
         Image cardImg = startCard.AddComponent<Image>();
@@ -589,7 +731,7 @@ public class GameManager : MonoBehaviour
         rtTitle.anchorMin = new Vector2(0.5f, 1f);
         rtTitle.anchorMax = new Vector2(0.5f, 1f);
         rtTitle.pivot = new Vector2(0.5f, 1f);
-        rtTitle.sizeDelta = new Vector2(720, 60);
+        rtTitle.sizeDelta = new Vector2(740, 60);
         rtTitle.anchoredPosition = new Vector2(0, -30);
         titleTMP.outlineWidth = 0.2f;
         titleTMP.outlineColor = Color.black;
@@ -600,7 +742,7 @@ public class GameManager : MonoBehaviour
         rtSub.anchorMin = new Vector2(0.5f, 1f);
         rtSub.anchorMax = new Vector2(0.5f, 1f);
         rtSub.pivot = new Vector2(0.5f, 1f);
-        rtSub.sizeDelta = new Vector2(720, 35);
+        rtSub.sizeDelta = new Vector2(740, 35);
         rtSub.anchoredPosition = new Vector2(0, -95);
 
         // Thanh phân cách trang trí
@@ -610,22 +752,22 @@ public class GameManager : MonoBehaviour
         rtDiv.anchorMin = new Vector2(0.5f, 1f);
         rtDiv.anchorMax = new Vector2(0.5f, 1f);
         rtDiv.pivot = new Vector2(0.5f, 1f);
-        rtDiv.sizeDelta = new Vector2(660, 2);
+        rtDiv.sizeDelta = new Vector2(680, 2);
         rtDiv.anchoredPosition = new Vector2(0, -140);
         Image divImg = divObj.AddComponent<Image>();
         divImg.color = new Color(1f, 1f, 1f, 0.2f);
 
-        // Nội dung hướng dẫn
-        string guideText = "• [W] / [S] hoặc Phím Mũi tên: Điều khiển tàu bay lên / xuống\n" +
-                          "• [Click Chuột] hoặc Phím [Space]: Khai hỏa tia laser\n" +
+        // Nội dung hướng dẫn (Hỗ trợ cả PC lẫn Android)
+        string guideText = "• Di chuyển: Phím [W][A][S][D], Cụm nút ảo [▲][▼][◄][►] hoặc Vuốt màn hình\n" +
+                          "• Khai hỏa: Phím [Space], Chạm màn hình hoặc Nút [BẮN]\n" +
                           "• Bắn hạ Thiên thạch để ghi điểm, tránh va chạm trực diện!";
-        TextMeshProUGUI infoTMP = CreateTMPText("Instructions", startCard.transform, guideText, 22, FontWeight.Regular, Color.white, TextAlignmentOptions.MidlineLeft);
-        infoTMP.lineSpacing = 15f;
+        TextMeshProUGUI infoTMP = CreateTMPText("Instructions", startCard.transform, guideText, 21, FontWeight.Regular, Color.white, TextAlignmentOptions.MidlineLeft);
+        infoTMP.lineSpacing = 14f;
         RectTransform rtInfo = infoTMP.rectTransform;
         rtInfo.anchorMin = new Vector2(0.5f, 1f);
         rtInfo.anchorMax = new Vector2(0.5f, 1f);
         rtInfo.pivot = new Vector2(0.5f, 1f);
-        rtInfo.sizeDelta = new Vector2(660, 140);
+        rtInfo.sizeDelta = new Vector2(680, 140);
         rtInfo.anchoredPosition = new Vector2(0, -155);
 
         // Nút Bắt Đầu
@@ -637,50 +779,86 @@ public class GameManager : MonoBehaviour
         rtBtnStart.anchorMin = new Vector2(0.5f, 1f);
         rtBtnStart.anchorMax = new Vector2(0.5f, 1f);
         rtBtnStart.pivot = new Vector2(0.5f, 1f);
-        rtBtnStart.sizeDelta = new Vector2(320, 60);
-        rtBtnStart.anchoredPosition = new Vector2(0, -345);
+        rtBtnStart.sizeDelta = new Vector2(340, 62);
+        rtBtnStart.anchoredPosition = new Vector2(0, -355);
 
         // Gợi ý phím tắt
-        TextMeshProUGUI hintTMP = CreateTMPText("Hint", startCard.transform, "(Hoặc nhấn phím [SPACE] / [ENTER] để vào game)", 18, FontWeight.Regular, new Color(0.75f, 0.8f, 0.9f, 0.85f), TextAlignmentOptions.Center);
+        TextMeshProUGUI hintTMP = CreateTMPText("Hint", startCard.transform, "(Nhấp nút hoặc nhấn [SPACE] / [ENTER] để vào game)", 18, FontWeight.Regular, new Color(0.75f, 0.8f, 0.9f, 0.85f), TextAlignmentOptions.Center);
         RectTransform rtHint = hintTMP.rectTransform;
         rtHint.anchorMin = new Vector2(0.5f, 1f);
         rtHint.anchorMax = new Vector2(0.5f, 1f);
         rtHint.pivot = new Vector2(0.5f, 1f);
-        rtHint.sizeDelta = new Vector2(720, 30);
-        rtHint.anchoredPosition = new Vector2(0, -435);
+        rtHint.sizeDelta = new Vector2(740, 30);
+        rtHint.anchoredPosition = new Vector2(0, -450);
 
-        // 4. HUD PANEL (Hiển thị khi chơi)
+        // 4. HUD PANEL (Hiển thị khi chơi game)
         hudPanel = new GameObject("HUDPanel");
         hudPanel.transform.SetParent(canvasObj.transform, false);
         RectTransform rtHUD = hudPanel.AddComponent<RectTransform>();
-        rtHUD.anchorMin = new Vector2(0f, 1f);
-        rtHUD.anchorMax = new Vector2(0f, 1f);
-        rtHUD.pivot = new Vector2(0f, 1f);
-        rtHUD.sizeDelta = new Vector2(560, 100);
-        rtHUD.anchoredPosition = new Vector2(30, -30);
+        rtHUD.anchorMin = Vector2.zero;
+        rtHUD.anchorMax = Vector2.one;
+        rtHUD.sizeDelta = Vector2.zero;
+        rtHUD.anchoredPosition = Vector2.zero;
 
-        Image hudBadge = hudPanel.AddComponent<Image>();
+        // Badge góc trên bên trái: Điểm số & Dòng hướng dẫn
+        GameObject hudBadgeObj = new GameObject("HUDBadge");
+        hudBadgeObj.transform.SetParent(hudPanel.transform, false);
+        RectTransform rtBadge = hudBadgeObj.AddComponent<RectTransform>();
+        rtBadge.anchorMin = new Vector2(0f, 1f);
+        rtBadge.anchorMax = new Vector2(0f, 1f);
+        rtBadge.pivot = new Vector2(0f, 1f);
+        rtBadge.sizeDelta = new Vector2(600, 100);
+        rtBadge.anchoredPosition = new Vector2(30, -30);
+
+        Image hudBadge = hudBadgeObj.AddComponent<Image>();
         hudBadge.sprite = panelSprite;
         hudBadge.type = Image.Type.Sliced;
         hudBadge.color = new Color(0.04f, 0.06f, 0.12f, 0.8f);
 
-        hudScoreText = CreateTMPText("ScoreText", hudPanel.transform, "Điểm số: 0", 32, FontWeight.Bold, new Color(1f, 0.9f, 0.25f), TextAlignmentOptions.MidlineLeft);
+        hudScoreText = CreateTMPText("ScoreText", hudBadgeObj.transform, "Điểm số: 0", 32, FontWeight.Bold, new Color(1f, 0.9f, 0.25f), TextAlignmentOptions.MidlineLeft);
         hudScoreText.outlineWidth = 0.2f;
         hudScoreText.outlineColor = Color.black;
         RectTransform rtHUDScore = hudScoreText.rectTransform;
         rtHUDScore.anchorMin = new Vector2(0f, 1f);
         rtHUDScore.anchorMax = new Vector2(0f, 1f);
         rtHUDScore.pivot = new Vector2(0f, 1f);
-        rtHUDScore.sizeDelta = new Vector2(500, 45);
+        rtHUDScore.sizeDelta = new Vector2(540, 45);
         rtHUDScore.anchoredPosition = new Vector2(24, -12);
 
-        TextMeshProUGUI hudInfoTMP = CreateTMPText("ControlsText", hudPanel.transform, "Điều khiển: [W] / [S] | Chuột / Space: Bắn", 18, FontWeight.Regular, new Color(0.9f, 0.95f, 1f, 0.9f), TextAlignmentOptions.MidlineLeft);
+        TextMeshProUGUI hudInfoTMP = CreateTMPText("ControlsText", hudBadgeObj.transform, "Điều khiển: [W][A][S][D], Nút ảo 4 chiều hoặc Vuốt | Nút [BẮN] để khai hỏa", 17, FontWeight.Regular, new Color(0.9f, 0.95f, 1f, 0.9f), TextAlignmentOptions.MidlineLeft);
         RectTransform rtHUDInfo = hudInfoTMP.rectTransform;
         rtHUDInfo.anchorMin = new Vector2(0f, 1f);
         rtHUDInfo.anchorMax = new Vector2(0f, 1f);
         rtHUDInfo.pivot = new Vector2(0f, 1f);
-        rtHUDInfo.sizeDelta = new Vector2(500, 30);
+        rtHUDInfo.sizeDelta = new Vector2(560, 30);
         rtHUDInfo.anchoredPosition = new Vector2(24, -58);
+
+        // Cụm Nút Ảo Mobile - Góc Trái Dưới (D-Pad 4 Hướng: ▲ Lên, ▼ Xuống, ◄ Trái, ► Phải)
+        Color dpadColor = new Color(0.12f, 0.45f, 0.85f, 0.75f);
+        Vector2 dpadCenter = new Vector2(170, 160);
+        float dpadOffset = 85f;
+        Vector2 btnSize = new Vector2(85, 85);
+
+        // Nút Lên ▲
+        GameObject upObj = CreateVirtualButton("BtnUp", hudPanel.transform, "▲", 42, Vector2.zero, new Vector2(0.5f, 0.5f), dpadCenter + new Vector2(0, dpadOffset), btnSize, dpadColor);
+        btnUpHold = upObj.AddComponent<VirtualHoldButton>();
+
+        // Nút Xuống ▼
+        GameObject downObj = CreateVirtualButton("BtnDown", hudPanel.transform, "▼", 42, Vector2.zero, new Vector2(0.5f, 0.5f), dpadCenter + new Vector2(0, -dpadOffset), btnSize, dpadColor);
+        btnDownHold = downObj.AddComponent<VirtualHoldButton>();
+
+        // Nút Trái ◄
+        GameObject leftObj = CreateVirtualButton("BtnLeft", hudPanel.transform, "◄", 42, Vector2.zero, new Vector2(0.5f, 0.5f), dpadCenter + new Vector2(-dpadOffset, 0), btnSize, dpadColor);
+        btnLeftHold = leftObj.AddComponent<VirtualHoldButton>();
+
+        // Nút Phải ►
+        GameObject rightObj = CreateVirtualButton("BtnRight", hudPanel.transform, "►", 42, Vector2.zero, new Vector2(0.5f, 0.5f), dpadCenter + new Vector2(dpadOffset, 0), btnSize, dpadColor);
+        btnRightHold = rightObj.AddComponent<VirtualHoldButton>();
+
+        // Cụm Nút Ảo Mobile - Góc Phải Dưới (BẮN Laser)
+        GameObject fireObj = CreateVirtualButton("BtnFire", hudPanel.transform, "BẮN", 32, new Vector2(1f, 0f), new Vector2(0.5f, 0.5f), new Vector2(-120, 130), new Vector2(140, 140), new Color(0.95f, 0.32f, 0.12f, 0.85f));
+        Button btnFireComponent = fireObj.GetComponent<Button>();
+        btnFireComponent.onClick.AddListener(SpawnC);
 
         // 5. GAME OVER PANEL
         gameOverPanel = new GameObject("GameOverPanel");
@@ -750,7 +928,7 @@ public class GameManager : MonoBehaviour
         rtBtnMenu.anchoredPosition = new Vector2(0, -270);
 
         // Dòng hint GameOver
-        TextMeshProUGUI goHint = CreateTMPText("GOHint", goCard.transform, "(Nhấn [R] để chơi lại nhanh)", 17, FontWeight.Regular, new Color(0.8f, 0.8f, 0.8f, 0.8f), TextAlignmentOptions.Center);
+        TextMeshProUGUI goHint = CreateTMPText("GOHint", goCard.transform, "(Nhấp nút hoặc nhấn [R] để chơi lại nhanh)", 17, FontWeight.Regular, new Color(0.8f, 0.8f, 0.8f, 0.8f), TextAlignmentOptions.Center);
         RectTransform rtGOHint = goHint.rectTransform;
         rtGOHint.anchorMin = new Vector2(0.5f, 1f);
         rtGOHint.anchorMax = new Vector2(0.5f, 1f);

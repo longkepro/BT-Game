@@ -25,6 +25,10 @@
 *.opendb
 *.VC.db
 
-# OS generated
+# OS generated & Temp office locks
 .DS_Store
 Thumbs.db
+~$*
+
+
+export_log.txt

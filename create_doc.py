@@ -109,10 +109,20 @@ def create_document():
         "Là kỹ thuật thiết kế giao diện hiện đại của Unity: Chuyển đổi toàn bộ từ hệ thống vẽ điểm ảnh IMGUI OnGUI cũ sang hệ thống Canvas uGUI phân lớp chuyên nghiệp với CanvasScaler (Reference Resolution 1920x1080) và font Segoe UI vector.",
         "CanvasScaler tự động co giãn và tính toán lại kích cỡ các phần tử theo tỷ lệ màn hình thực tế. Ký tự tiếng Việt được dựng trực tiếp từ vector TrueType ở độ phân giải sắc nét nhất thay vì bị kéo dãn bitmap. Các bảng thông báo và nút bấm ứng dụng kỹ thuật 9-Slice bo góc tròn cùng hiệu ứng đổ bóng Shadow/Outline.",
         "Giải quyết triệt để vấn đề chữ hiển thị bị mờ, nhòe, vỡ hạt hoặc rách sọc ngang (scanline tearing) khi phóng to Game view hoặc chạy trên màn hình độ phân giải cao / Windows DPI scaling (125%, 150%). Đảm bảo UI luôn đạt chất lượng thẩm mỹ cao nhất cho buổi báo cáo.")
+
+    add_technique(doc, "16. Hybrid Mobile Touch & Virtual Gamepad Architecture (Kiến Trúc Điều Khiển Cảm Ứng Di Động Đa Cơ Chế)",
+        "Là hệ thống xử lý đầu vào (Input Handling) đa nền tảng kết hợp đồng thời giữa: Vuốt chạm trực tiếp (Touch & Drag), Cụm nút bấm ảo (Virtual Hold Buttons) và Bàn phím/Chuột máy tính truyền thống.",
+        "Sử dụng các Interface IPointerDownHandler và IPointerUpHandler để tạo nút ảo giữ ngón tay di chuyển liên tục, kết hợp bộ lọc EventSystem.current.IsPointerOverGameObject để phân tách rõ ràng giữa việc bấm nút UI và việc vuốt màn hình. Tọa độ chạm được chuyển đổi sang World Space qua ScreenToWorldPoint để phi thuyền bám theo mượt mà.",
+        "Đem lại khả năng tương thích 100% khi đóng gói và xuất sang Android Studio để chạy trên điện thoại hoặc máy ảo Android. Người chơi có thể tự do chọn cách vuốt ngón tay hoặc bấm nút ảo 2 bên như tay cầm chơi game.")
     
     file_path = r"c:\Users\ADMIN\Desktop\BT-game\Tai_Lieu_Ky_Thuat_Game_V2_Full.docx"
-    doc.save(file_path)
-    print(f"File updated successfully at {file_path}")
+    try:
+        doc.save(file_path)
+        print(f"File updated successfully at {file_path}")
+    except PermissionError:
+        alt_path = r"c:\Users\ADMIN\Desktop\BT-game\Tai_Lieu_Ky_Thuat_Game_V3_Android.docx"
+        doc.save(alt_path)
+        print(f"File V2 dang duoc mo trong Word. Da luu thanh ban moi tai: {alt_path}")
 
 if __name__ == "__main__":
     create_document()
