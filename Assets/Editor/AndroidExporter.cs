@@ -39,9 +39,17 @@ public class AndroidExporter
             EditorPrefs.SetString("AndroidNdkRoot", customNdk);
             EditorPrefs.SetBool("NdkUseEmbedded", false);
 
-            UnityEditor.Android.AndroidExternalToolsSettings.jdkRootPath = customJdk;
-            UnityEditor.Android.AndroidExternalToolsSettings.sdkRootPath = customSdk;
-            UnityEditor.Android.AndroidExternalToolsSettings.ndkRootPath = customNdk;
+            try
+            {
+                var toolsType = System.Type.GetType("UnityEditor.Android.AndroidExternalToolsSettings, UnityEditor.Android.Extensions");
+                if (toolsType != null)
+                {
+                    toolsType.GetProperty("jdkRootPath")?.SetValue(null, customJdk);
+                    toolsType.GetProperty("sdkRootPath")?.SetValue(null, customSdk);
+                    toolsType.GetProperty("ndkRootPath")?.SetValue(null, customNdk);
+                }
+            }
+            catch {}
 
             System.Environment.SetEnvironmentVariable("JAVA_HOME", customJdk);
             System.Environment.SetEnvironmentVariable("ANDROID_HOME", customSdk);

@@ -583,7 +583,11 @@ public class GameManager : MonoBehaviour
         tmp.fontWeight = fontWeight;
         tmp.color = color;
         tmp.alignment = alignment;
+#if UNITY_2023_1_OR_NEWER
+        tmp.textWrappingMode = TextWrappingModes.Normal;
+#else
         tmp.enableWordWrapping = true;
+#endif
         tmp.overflowMode = TextOverflowModes.Overflow;
         tmp.raycastTarget = false;
         return tmp;

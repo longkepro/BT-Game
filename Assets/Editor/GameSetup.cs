@@ -35,7 +35,11 @@ public class GameSetup : EditorWindow
         }
 
         // Dọn dẹp object cũ
-        GameObject[] allObjects = FindObjectsOfType<GameObject>();
+#if UNITY_2023_1_OR_NEWER
+        GameObject[] allObjects = Object.FindObjectsByType<GameObject>(FindObjectsSortMode.None);
+#else
+        GameObject[] allObjects = Object.FindObjectsOfType<GameObject>();
+#endif
         foreach(GameObject go in allObjects) {
             if (go.name.Contains("Prefab") || go.name.Contains("Object A") || go.name.Contains("Object B") || go.name.Contains("Object C") || go.name == "GameManager" || go.name.Contains("Background") || go.name.Contains("GameCanvas") || go.name.Contains("EventSystem")) {
                 DestroyImmediate(go);
