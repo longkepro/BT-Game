@@ -25,29 +25,34 @@ public class AndroidExporter
         PlayerSettings.Android.minSdkVersion = AndroidSdkVersions.AndroidApiLevel24;
         PlayerSettings.Android.targetSdkVersion = AndroidSdkVersions.AndroidApiLevelAuto;
 
-        // Point Android SDK, JDK, and NDK to installed locations
-        string sdkPath = "C:/Users/ADMIN/AppData/Local/Android/Sdk";
-        string jdkPath = "C:/Users/ADMIN/OpenJDK17";
-        string ndkPath = "C:/Users/ADMIN/AndroidNDK/android-ndk-r23b";
+        // Check if custom paths exist (for local machine setup), otherwise fallback to Unity's default installed Android tools
+        string customJdk = "C:/Users/ADMIN/OpenJDK17";
+        string customNdk = "C:/Users/ADMIN/AndroidNDK/android-ndk-r23b";
+        string customSdk = "C:/Users/ADMIN/AppData/Local/Android/Sdk";
 
-        EditorPrefs.SetString("AndroidSdkRoot", sdkPath);
-        EditorPrefs.SetBool("SdkUseEmbedded", false);
-        EditorPrefs.SetString("JdkPath", jdkPath);
-        EditorPrefs.SetBool("JdkUseEmbedded", false);
-        EditorPrefs.SetString("AndroidNdkRoot", ndkPath);
-        EditorPrefs.SetBool("NdkUseEmbedded", false);
+        if (Directory.Exists(customJdk) && Directory.Exists(customNdk) && Directory.Exists(customSdk))
+        {
+            EditorPrefs.SetString("AndroidSdkRoot", customSdk);
+            EditorPrefs.SetBool("SdkUseEmbedded", false);
+            EditorPrefs.SetString("JdkPath", customJdk);
+            EditorPrefs.SetBool("JdkUseEmbedded", false);
+            EditorPrefs.SetString("AndroidNdkRoot", customNdk);
+            EditorPrefs.SetBool("NdkUseEmbedded", false);
 
-        UnityEditor.Android.AndroidExternalToolsSettings.jdkRootPath = jdkPath;
-        UnityEditor.Android.AndroidExternalToolsSettings.sdkRootPath = sdkPath;
-        UnityEditor.Android.AndroidExternalToolsSettings.ndkRootPath = ndkPath;
+            UnityEditor.Android.AndroidExternalToolsSettings.jdkRootPath = customJdk;
+            UnityEditor.Android.AndroidExternalToolsSettings.sdkRootPath = customSdk;
+            UnityEditor.Android.AndroidExternalToolsSettings.ndkRootPath = customNdk;
 
-        System.Environment.SetEnvironmentVariable("JAVA_HOME", jdkPath);
-        System.Environment.SetEnvironmentVariable("ANDROID_HOME", sdkPath);
-        System.Environment.SetEnvironmentVariable("ANDROID_SDK_ROOT", sdkPath);
-        System.Environment.SetEnvironmentVariable("ANDROID_NDK_ROOT", ndkPath);
-        System.Environment.SetEnvironmentVariable("ANDROID_NDK_HOME", ndkPath);
+            System.Environment.SetEnvironmentVariable("JAVA_HOME", customJdk);
+            System.Environment.SetEnvironmentVariable("ANDROID_HOME", customSdk);
+            System.Environment.SetEnvironmentVariable("ANDROID_SDK_ROOT", customSdk);
+            System.Environment.SetEnvironmentVariable("ANDROID_NDK_ROOT", customNdk);
+            System.Environment.SetEnvironmentVariable("ANDROID_NDK_HOME", customNdk);
+        }
 
-        string exportPath = "C:/Users/ADMIN/Desktop/BT-Game-Android";
+        string desktopPath = System.Environment.GetFolderPath(System.Environment.SpecialFolder.DesktopDirectory);
+        if (string.IsNullOrEmpty(desktopPath)) desktopPath = "C:/Users/ADMIN/Desktop";
+        string exportPath = Path.Combine(desktopPath, "BT-Game-Android").Replace("\\", "/");
 
         string[] scenes = new string[] { "Assets/A.unity" };
 
